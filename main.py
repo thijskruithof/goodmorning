@@ -8,6 +8,35 @@ from PIL import Image
 from io import BytesIO
 import numpy
 import json 
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import _thread as thread
+import time 
+
+class HttpServ(BaseHTTPRequestHandler):
+    def do_GET(self):
+       path = self.path
+       if path == '/':
+           path = '/index.html'
+       path = '/www'+path           
+       try:
+           file_to_open = open(path[1:]).read()
+           self.send_response(200)
+       except:
+           file_to_open = "File not found"
+           self.send_response(404)
+       self.end_headers()
+       self.wfile.write(bytes(file_to_open, 'utf-8'))
+
+def run_http_server():
+    httpd = HTTPServer(('localhost',8080),HttpServ)
+    httpd.serve_forever()
+
+# Start up a local http server in a bg thread
+thread.start_new_thread(run_http_server, ())
+
+# Give HTTP server some time to start up
+time.sleep(5)
+
 
 OVERLAY_WIDTH = 1920
 OVERLAY_HEIGHT = 1080
@@ -18,7 +47,7 @@ options.add_argument('headless')
 options.add_argument('window-size=%dx%d' % (OVERLAY_WIDTH, OVERLAY_HEIGHT))
 
 browser = webdriver.Chrome(options)
-browser.get('file:///D:/Private/Projects/goodmorning/hello.html')
+browser.get('http://127.0.0.1:8080')
 
 # Send custom cmd to set background color to 0 alpha
 url = browser.command_executor._url + "/session/%s/chromium/send_command_and_get_result" % browser.session_id
@@ -28,15 +57,8 @@ response = browser.command_executor._request('POST', url, body)
 
 
 # Extract screenshot pixels
-element = browser.find_element(value='hello')
-element_png = element.screenshot_as_png
+browser_element = browser.find_element(value='hello')
 
-stream = BytesIO(element_png)
-browser_image = Image.open(stream).convert("RGBA")
-stream.close()
-# image.save('out.png')
-
-# exit()
 
 
 # Set up webcam capture.
@@ -75,6 +97,12 @@ with pyvirtualcam.Camera(width, height, fps_out, fmt=PixelFormat.BGR, print_fps=
         # Create image for webcam frame
         cam_image = Image.fromarray(frame, mode="RGB")
         cam_image = cam_image.convert("RGBA")
+
+        # Extract screenshot of browser
+        browser_element_png = browser_element.screenshot_as_png
+        browser_element_stream = BytesIO(browser_element_png)
+        browser_image = Image.open(browser_element_stream).convert("RGBA")
+        browser_element_stream.close()
 
         # Draw browser on top
         cam_image.alpha_composite(browser_image, (10,10))
